@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  applicant
+  hrd
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum EducationLevel {
+  sma_smk
+  d3
+  s1_d4
+  s2
+  s3
+}
+
+enum JobStatus {
+  draft
+  open
+  closed
+}
+
+enum ApplicationStage {
+  administrasi
+  tes_teknis
+  interview
+  selesai
+}
+
+enum ApplicationStatus {
+  pending
+  accepted
+  rejected
+}
+
+enum SelectionStageName {
+  administrasi
+  tes_teknis
+  interview
+}
+
+enum StageStatus {
+  pending
+  passed
+  failed
+}
+
+enum CriteriaType {
+  benefit
+  cost
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model User {
+  id            String    @id @default(uuid())
+  name          String    @db.VarChar(100)
+  email         String    @unique @db.VarChar(150)
+  password      String    @db.VarChar(255)
+  role          Role
+  phone         String?   @db.VarChar(20)
+  ktp_photo_url String?   @db.VarChar(500)
+  created_at    DateTime  @default(now())
+
+  // Relations
+  applicant_profile   ApplicantProfile?
+  job_postings        JobPosting[]
+  job_applications    JobApplication[]  @relation("ApplicantApplications")
+  decided_applications JobApplication[]  @relation("DeciderApplications")
+
+  @@map("users")
+}
+
+model ApplicantProfile {
+  id               String          @id @default(uuid())
+  user_id          String          @unique
+  ktp_number       String?         @db.VarChar(16)
+  birth_date       DateTime?       @db.Date
+  gender           Gender?
+  address          String?         @db.Text
+  city             String?         @db.VarChar(100)
+  province         String?         @db.VarChar(100)
+  education_level  EducationLevel?
+  major            String?         @db.VarChar(150)
+  institution      String?         @db.VarChar(150)
+  experience_years Int             @default(0)
+  ipk              Float?
+  skills           String?         @db.Text
+  phone            String?         @db.VarChar(20)
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("applicant_profiles")
+}
+
+model JobPosting {
+  id           String    @id @default(uuid())
+  created_by   String
+  title        String    @db.VarChar(200)
+  description  String    @db.Text
+  requirements String?   @db.Text
+  min_age      Int
+  max_age      Int
+  quota        Int
+  deadline     DateTime?
+  status       JobStatus @default(draft)
+  created_at   DateTime  @default(now())
+
+  // Relations
+  creator          User             @relation(fields: [created_by], references: [id])
+  job_applications JobApplication[]
+  saw_scores       SawScore[]
+
+  @@map("job_postings")
+}
+
+model JobApplication {
+  id             String            @id @default(uuid())
+  user_id        String
+  job_posting_id String
+  decided_by     String?
+  cv_url         String?           @db.VarChar(500)
+  current_stage  ApplicationStage  @default(administrasi)
+  status         ApplicationStatus @default(pending)
+  applied_at     DateTime          @default(now())
+  decided_at     DateTime?
+
+  // Relations
+  applicant   User       @relation("ApplicantApplications", fields: [user_id], references: [id])
+  decider     User?      @relation("DeciderApplications", fields: [decided_by], references: [id])
+  job_posting JobPosting @relation(fields: [job_posting_id], references: [id])
+
+  selection_stages SelectionStage[]
+  saw_score        SawScore?
+
+  @@unique([user_id, job_posting_id])
+  @@map("job_applications")
+}
+
+model SelectionStage {
+  id             String             @id @default(uuid())
+  application_id String
+  stage_name     SelectionStageName
+  score          Int?
+  status         StageStatus        @default(pending)
+  notes          String?            @db.Text
+  evaluated_at   DateTime?
+
+  // Relations
+  application JobApplication @relation(fields: [application_id], references: [id], onDelete: Cascade)
+
+  @@unique([application_id, stage_name])
+  @@map("selection_stages")
+}
+
+model SawCriteria {
+  id         String       @id @default(uuid())
+  code       String       @unique @db.VarChar(5)
+  name       String       @db.VarChar(100)
+  weight     Float
+  type       CriteriaType
+  order      Int
+  updated_at DateTime     @updatedAt
+
+  @@map("saw_criteria")
+}
+
+model SawScore {
+  id             String   @id @default(uuid())
+  application_id String   @unique
+  job_posting_id String
+  c1_education   Float
+  c2_experience  Float
+  c3_technical   Float
+  c4_ipk         Float
+  c5_age         Float
+  final_score    Float
+  rank           Int
+  calculated_at  DateTime @default(now())
+
+  // Relations
+  application JobApplication @relation(fields: [application_id], references: [id], onDelete: Cascade)
+  job_posting JobPosting     @relation(fields: [job_posting_id], references: [id])
+
+  @@map("saw_scores")
+}
