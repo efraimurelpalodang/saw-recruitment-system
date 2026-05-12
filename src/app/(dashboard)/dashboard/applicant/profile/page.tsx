@@ -23,17 +23,19 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  Loader2, 
-  User as UserIcon, 
-  GraduationCap, 
-  MapPin, 
-  Briefcase, 
-  Mail, 
-  Phone, 
+import {
+  Loader2,
+  User as UserIcon,
+  GraduationCap,
+  MapPin,
+  Briefcase,
+  Mail,
+  Phone,
   Calendar,
   Save,
-  UserCircle
+  UserCircle,
+  Plus,
+  X
 } from "lucide-react";
 
 const EDUCATION_OPTIONS = [
@@ -71,7 +73,8 @@ export default function ApplicantProfilePage() {
   const [institution, setInstitution] = useState("");
   const [experienceYears, setExperienceYears] = useState("");
   const [ipk, setIpk] = useState("");
-  const [skills, setSkills] = useState("");
+  const [skills, setSkills] = useState<string[]>([]);
+  const [newSkill, setNewSkill] = useState("");
 
   // Load profile on mount
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function ApplicantProfilePage() {
           data.experience_years !== null ? String(data.experience_years) : ""
         );
         setIpk(data.ipk !== null ? String(data.ipk) : "");
-        setSkills(data.skills ?? "");
+        setSkills(data.skills ? data.skills.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
       } catch (err) {
         setError("Terjadi kesalahan saat memuat data.");
       } finally {
@@ -130,7 +133,7 @@ export default function ApplicantProfilePage() {
           institution,
           experience_years: experienceYears !== "" ? Number(experienceYears) : null,
           ipk: ipk !== "" ? Number(ipk) : null,
-          skills,
+          skills: skills.join(", "),
         }),
       });
 
@@ -146,6 +149,17 @@ export default function ApplicantProfilePage() {
       setSaving(false);
     }
   }
+
+  const addSkill = () => {
+    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
+      setSkills([...skills, newSkill.trim()]);
+      setNewSkill("");
+    }
+  };
+
+  const removeSkill = (skillToRemove: string) => {
+    setSkills(skills.filter((s) => s !== skillToRemove));
+  };
 
   if (loading) {
     return <ProfileSkeleton />;
@@ -173,8 +187,8 @@ export default function ApplicantProfilePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-           {success && <span className="text-sm text-green-600 font-medium animate-in slide-in-from-right-2 fade-in">{success}</span>}
-           {error && <span className="text-sm text-destructive font-medium animate-in slide-in-from-right-2 fade-in">{error}</span>}
+          {success && <span className="text-sm text-green-600 font-medium animate-in slide-in-from-right-2 fade-in">{success}</span>}
+          {error && <span className="text-sm text-destructive font-medium animate-in slide-in-from-right-2 fade-in">{error}</span>}
         </div>
       </div>
 
@@ -191,7 +205,7 @@ export default function ApplicantProfilePage() {
                 Pendidikan & Skill
               </TabsTrigger>
             </TabsList>
-            
+
             <Button type="submit" disabled={saving} className="w-full sm:w-auto bg-foreground text-background hover:bg-foreground/90 transition-all">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {saving ? "Menyimpan..." : "Simpan Perubahan"}
@@ -199,8 +213,8 @@ export default function ApplicantProfilePage() {
           </div>
 
           <TabsContent value="personal" className="space-y-6 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="md:col-span-2 border-foreground/5 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="border-foreground/5 shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <UserIcon className="h-5 w-5" /> Informasi Dasar
@@ -408,18 +422,57 @@ export default function ApplicantProfilePage() {
                       className="focus-visible:ring-foreground/20"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <Label htmlFor="skills" className="text-sm font-semibold">Keahlian (Skills)</Label>
-                    <Textarea
-                      id="skills"
-                      value={skills}
-                      onChange={(e) => setSkills(e.target.value)}
-                      disabled={saving}
-                      rows={6}
-                      placeholder="Contoh: JavaScript, Manajemen Proyek, AutoCAD, Analisis Data..."
-                      className="resize-none focus-visible:ring-foreground/20"
-                    />
-                    <p className="text-[10px] text-muted-foreground italic">Pisahkan keahlian dengan tanda koma.</p>
+                    <div className="flex gap-2">
+                      <Input
+                        id="skills"
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addSkill();
+                          }
+                        }}
+                        disabled={saving}
+                        placeholder="Tambah keahlian (contoh: JavaScript)"
+                        className="focus-visible:ring-foreground/20"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={addSkill}
+                        disabled={saving || !newSkill.trim()}
+                        className="shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 min-h-[40px] p-3 rounded-md border border-foreground/5 bg-muted/20">
+                      {skills.length === 0 && (
+                        <span className="text-xs text-muted-foreground italic">Belum ada keahlian yang ditambahkan.</span>
+                      )}
+                      {skills.map((skill) => (
+                        <div
+                          key={skill}
+                          className="flex items-center gap-1 bg-foreground text-background px-2.5 py-1 rounded-full text-xs font-medium animate-in zoom-in-95 duration-200"
+                        >
+                          {skill}
+                          <button
+                            type="button"
+                            onClick={() => removeSkill(skill)}
+                            className="hover:text-red-400 transition-colors ml-1"
+                            disabled={saving}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">Tekan Enter atau klik tombol + untuk menambah keahlian.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -450,8 +503,8 @@ function ProfileSkeleton() {
           <Skeleton className="h-10 w-[400px]" />
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="h-[400px] md:col-span-2 rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-[400px] rounded-xl" />
           <Skeleton className="h-[400px] rounded-xl" />
         </div>
       </div>
