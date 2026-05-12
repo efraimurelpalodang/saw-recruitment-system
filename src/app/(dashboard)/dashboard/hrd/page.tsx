@@ -1,0 +1,8 @@
+export default function HrdDashboardPage() {
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-4">HRD Dashboard</h1>
+      <p>HRD Dashboard — coming soon.</p>
+    </div>
+  );
+}
