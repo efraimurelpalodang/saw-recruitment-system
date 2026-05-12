@@ -14,8 +14,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -78,7 +79,11 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [nikAlert, setNikAlert] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   // ── Step 1: handle KTP upload & run OCR ─────────────────────────────────
@@ -92,6 +97,7 @@ export default function RegisterPage() {
     setOcrLoading(true);
     setOcrProgress(0);
     setError("");
+    setNikAlert("");
 
     try {
       const result = await Tesseract.recognize(file, "ind", {
@@ -108,13 +114,72 @@ export default function RegisterPage() {
       setBirthDate(fields.birth_date);
       setGender(fields.gender);
       setAddress(fields.address);
+
+      // Check NIK duplicate if extracted
+      if (fields.ktp_number) {
+        await checkNikDuplicate(fields.ktp_number);
+      }
+
       setStep("review");
     } catch (err) {
       console.error(err);
-      setError("Failed to read KTP. Please try a clearer photo.");
+      setError("Gagal membaca KTP. Silakan coba dengan foto yang lebih jelas.");
     } finally {
       setOcrLoading(false);
     }
+  }
+
+  // ── Check NIK duplicate ─────────────────────────────────────────────────
+
+  async function checkNikDuplicate(nik: string) {
+    try {
+      const res = await fetch("/api/auth/check-nik", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ktp_number: nik }),
+      });
+
+      const data = await res.json();
+
+      if (data.exists) {
+        setNikAlert("NIK sudah terdaftar di sistem. Silakan hubungi admin atau gunakan NIK lain.");
+      } else {
+        setNikAlert("");
+      }
+    } catch {
+      console.error("Gagal memeriksa NIK.");
+    }
+  }
+
+  // ── Step 2 → Step 3: validate review fields ─────────────────────────────
+
+  function validateReviewFields(): boolean {
+    const errors: Record<string, string> = {};
+
+    if (!name.trim()) {
+      errors.name = "Nama lengkap wajib diisi.";
+    }
+
+    if (!birthDate) {
+      errors.birth_date = "Tanggal lahir wajib diisi.";
+    }
+
+    if (!gender) {
+      errors.gender = "Jenis kelamin wajib dipilih.";
+    }
+
+    if (!address.trim()) {
+      errors.address = "Alamat wajib diisi.";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  function handleContinueToAccount() {
+    if (nikAlert) return; // Block if NIK is duplicate
+    if (!validateReviewFields()) return;
+    setStep("account");
   }
 
   // ── Step 3: submit ───────────────────────────────────────────────────────
@@ -122,16 +187,26 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const errors: Record<string, string> = {};
 
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
+    if (!email.trim()) {
+      errors.email = "Email wajib diisi.";
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
+    if (!password) {
+      errors.password = "Kata sandi wajib diisi.";
+    } else if (password.length < 8) {
+      errors.password = "Kata sandi harus minimal 8 karakter.";
     }
+
+    if (!confirm) {
+      errors.confirm = "Konfirmasi kata sandi wajib diisi.";
+    } else if (password !== confirm) {
+      errors.confirm = "Kata sandi tidak cocok.";
+    }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSubmitting(true);
 
@@ -146,7 +221,7 @@ export default function RegisterPage() {
         .upload(fileName, ktpFile, { upsert: false });
 
       if (uploadError) {
-        setError("Failed to upload KTP photo. Please try again.");
+        setError("Gagal mengunggah foto KTP. Silakan coba lagi.");
         setSubmitting(false);
         return;
       }
@@ -178,7 +253,7 @@ export default function RegisterPage() {
     setSubmitting(false);
 
     if (!res.ok) {
-      setError(data.error ?? "Registration failed. Please try again.");
+      setError(data.error ?? "Pendaftaran gagal. Silakan coba lagi.");
       return;
     }
 
@@ -193,12 +268,12 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center py-10 bg-background">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Create an account</CardTitle>
+          <CardTitle>Buat Akun</CardTitle>
           <CardDescription>
-            Step {stepNumber} of 3 —{" "}
-            {step === "upload" && "Upload your KTP"}
-            {step === "review" && "Review your details"}
-            {step === "account" && "Set your email & password"}
+            Langkah {stepNumber} dari 3 —{" "}
+            {step === "upload" && "Unggah KTP Anda"}
+            {step === "review" && "Periksa data Anda"}
+            {step === "account" && "Atur email & kata sandi"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -206,8 +281,8 @@ export default function RegisterPage() {
           {step === "upload" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Upload a clear photo of your KTP (Indonesian ID card). Your
-                information will be filled in automatically.
+                Unggah foto KTP (Kartu Tanda Penduduk) yang jelas. Data akan
+                diisi secara otomatis.
               </p>
               <div
                 className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-muted/50 transition-colors"
@@ -217,12 +292,12 @@ export default function RegisterPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={ktpPreview}
-                    alt="KTP preview"
+                    alt="Preview KTP"
                     className="mx-auto max-h-48 object-contain rounded"
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Click to select a photo
+                    Klik untuk memilih foto
                   </p>
                 )}
               </div>
@@ -236,7 +311,7 @@ export default function RegisterPage() {
               {ocrLoading && (
                 <div className="space-y-1.5">
                   <p className="text-sm text-muted-foreground">
-                    Reading KTP... {ocrProgress}%
+                    Membaca KTP... {ocrProgress}%
                   </p>
                   <Progress value={ocrProgress} />
                 </div>
@@ -251,73 +326,114 @@ export default function RegisterPage() {
           {step === "review" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Review the information extracted from your KTP. Correct any
-                mistakes before continuing.
+                Periksa data yang diekstrak dari KTP Anda. Perbaiki jika ada
+                kesalahan sebelum melanjutkan.
               </p>
+
+              {nikAlert && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>NIK Sudah Terdaftar</AlertTitle>
+                  <AlertDescription>{nikAlert}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-1.5">
-                <Label htmlFor="name">Full name</Label>
+                <Label htmlFor="name">Nama Lengkap</Label>
                 <Input
                   id="name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, name: "" }));
+                  }}
                   required
+                  className={fieldErrors.name ? "border-red-500" : ""}
                 />
+                {fieldErrors.name && (
+                  <p className="text-xs text-destructive">{fieldErrors.name}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ktp_number">NIK</Label>
                 <Input
                   id="ktp_number"
                   value={ktpNumber}
-                  onChange={(e) => setKtpNumber(e.target.value)}
+                  readOnly
                   maxLength={16}
+                  className="bg-muted cursor-not-allowed"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="birth_date">Date of birth</Label>
+                <Label htmlFor="birth_date">Tanggal Lahir</Label>
                 <Input
                   id="birth_date"
                   type="date"
                   value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  onChange={(e) => {
+                    setBirthDate(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, birth_date: "" }));
+                  }}
+                  className={fieldErrors.birth_date ? "border-red-500" : ""}
                 />
+                {fieldErrors.birth_date && (
+                  <p className="text-xs text-destructive">{fieldErrors.birth_date}</p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="gender">Gender</Label>
+                <Label htmlFor="gender">Jenis Kelamin</Label>
                 <select
                   id="gender"
                   value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  onChange={(e) => {
+                    setGender(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, gender: "" }));
+                  }}
+                  className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.gender ? "border-red-500" : "border-input"}`}
                 >
-                  <option value="">Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
+                  <option value="">Pilih jenis kelamin</option>
+                  <option value="male">Laki-laki</option>
+                  <option value="female">Perempuan</option>
                 </select>
+                {fieldErrors.gender && (
+                  <p className="text-xs text-destructive">{fieldErrors.gender}</p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">Alamat</Label>
                 <Input
                   id="address"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, address: "" }));
+                  }}
+                  className={fieldErrors.address ? "border-red-500" : ""}
                 />
+                {fieldErrors.address && (
+                  <p className="text-xs text-destructive">{fieldErrors.address}</p>
+                )}
               </div>
               <div className="flex gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setStep("upload")}
+                  onClick={() => {
+                    setStep("upload");
+                    setNikAlert("");
+                    setFieldErrors({});
+                  }}
                 >
-                  Re-upload KTP
+                  Unggah Ulang KTP
                 </Button>
                 <Button
                   type="button"
                   className="flex-1"
-                  onClick={() => setStep("account")}
-                  disabled={!name}
+                  onClick={handleContinueToAccount}
+                  disabled={!name || !!nikAlert}
                 >
-                  Continue
+                  Lanjutkan
                 </Button>
               </div>
             </div>
@@ -331,36 +447,75 @@ export default function RegisterPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="anda@contoh.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, email: "" }));
+                  }}
                   disabled={submitting}
                   required
+                  className={fieldErrors.email ? "border-red-500" : ""}
                 />
+                {fieldErrors.email && (
+                  <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Min. 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={submitting}
-                  required
-                />
+                <Label htmlFor="password">Kata Sandi</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min. 8 karakter"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, password: "" }));
+                    }}
+                    disabled={submitting}
+                    required
+                    className={fieldErrors.password ? "border-red-500 pr-10" : "pr-10"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {fieldErrors.password && (
+                  <p className="text-xs text-destructive">{fieldErrors.password}</p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="confirm">Confirm password</Label>
-                <Input
-                  id="confirm"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  disabled={submitting}
-                  required
-                />
+                <Label htmlFor="confirm">Konfirmasi Kata Sandi</Label>
+                <div className="relative">
+                  <Input
+                    id="confirm"
+                    type={showConfirm ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={confirm}
+                    onChange={(e) => {
+                      setConfirm(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, confirm: "" }));
+                    }}
+                    disabled={submitting}
+                    required
+                    className={fieldErrors.confirm ? "border-red-500 pr-10" : "pr-10"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  >
+                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {fieldErrors.confirm && (
+                  <p className="text-xs text-destructive">{fieldErrors.confirm}</p>
+                )}
               </div>
               {error && (
                 <p className="text-sm text-destructive">{error}</p>
@@ -370,27 +525,30 @@ export default function RegisterPage() {
                   type="button"
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setStep("review")}
+                  onClick={() => {
+                    setStep("review");
+                    setFieldErrors({});
+                  }}
                   disabled={submitting}
                 >
-                  Back
+                  Kembali
                 </Button>
                 <Button type="submit" className="flex-1" disabled={submitting}>
                   {submitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  {submitting ? "Creating account..." : "Create account"}
+                  {submitting ? "Membuat akun..." : "Buat Akun"}
                 </Button>
               </div>
             </form>
           )}
           <p className="text-center text-sm text-muted-foreground pt-2">
-            Already have an account?{" "}
+            Sudah punya akun?{" "}
             <Link
               href="/login"
               className="font-medium text-foreground hover:underline"
             >
-              Sign in
+              Masuk
             </Link>
           </p>
         </CardContent>

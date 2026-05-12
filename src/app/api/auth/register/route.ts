@@ -19,14 +19,14 @@ export async function POST(req: NextRequest) {
     // Basic validation
     if (!name || !email || !password) {
       return NextResponse.json(
-        { error: "Name, email, and password are required." },
+        { error: "Nama, email, dan kata sandi wajib diisi." },
         { status: 400 }
       );
     }
 
     if (password.length < 8) {
       return NextResponse.json(
-        { error: "Password must be at least 8 characters." },
+        { error: "Kata sandi harus minimal 8 karakter." },
         { status: 400 }
       );
     }
@@ -38,9 +38,23 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       return NextResponse.json(
-        { error: "An account with this email already exists." },
+        { error: "Email sudah terdaftar. Silakan gunakan email lain." },
         { status: 409 }
       );
+    }
+
+    // Check for duplicate NIK
+    if (ktp_number) {
+      const existingNik = await prisma.applicantProfile.findFirst({
+        where: { ktp_number },
+      });
+
+      if (existingNik) {
+        return NextResponse.json(
+          { error: "NIK sudah terdaftar di sistem." },
+          { status: 409 }
+        );
+      }
     }
 
     // Hash password and create user with applicant profile
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[REGISTER ERROR]", error);
     return NextResponse.json(
-      { error: "Something went wrong. Please try again." },
+      { error: "Terjadi kesalahan. Silakan coba lagi." },
       { status: 500 }
     );
   }
