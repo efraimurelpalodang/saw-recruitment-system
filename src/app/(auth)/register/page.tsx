@@ -4,6 +4,10 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Tesseract from "tesseract.js";
 import { supabase } from "@/lib/supabase";
+import { signIn } from "next-auth/react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { registerSchema, type RegisterFormValues } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +54,7 @@ function extractKtpFields(text: string) {
 
   return {
     name: find(["nama"]),
-    ktp_number: find(["nik", "nomor induk"]).replace(/\s/g, ""),
+    ktp_number: find(["nik", "nomor induk"]).replace(/\s/g, "").replace(/[^0-9]/g, ""),
     birth_date,
     gender,
     address: find(["alamat"]),
@@ -70,21 +74,32 @@ export default function RegisterPage() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrLoading, setOcrLoading] = useState(false);
 
-  // Form fields
-  const [name, setName] = useState("");
-  const [ktpNumber, setKtpNumber] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState("");
-  const [address, setAddress] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [error, setError] = useState("");
+  const [serverError, setServerError] = useState("");
   const [nikAlert, setNikAlert] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    trigger,
+    watch,
+    formState: { errors },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      ktp_number: "",
+      birth_date: "",
+      gender: undefined,
+      address: "",
+      email: "",
+      password: "",
+      confirm: "",
+    },
+  });
 
   // ── Step 1: handle KTP upload & run OCR ─────────────────────────────────
 
@@ -96,7 +111,7 @@ export default function RegisterPage() {
     setKtpPreview(URL.createObjectURL(file));
     setOcrLoading(true);
     setOcrProgress(0);
-    setError("");
+    setServerError("");
     setNikAlert("");
 
     try {
@@ -109,11 +124,14 @@ export default function RegisterPage() {
       });
 
       const fields = extractKtpFields(result.data.text);
-      setName(fields.name);
-      setKtpNumber(fields.ktp_number);
-      setBirthDate(fields.birth_date);
-      setGender(fields.gender);
-      setAddress(fields.address);
+      
+      setValue("name", fields.name);
+      setValue("ktp_number", fields.ktp_number);
+      setValue("birth_date", fields.birth_date);
+      if (fields.gender === "male" || fields.gender === "female") {
+        setValue("gender", fields.gender);
+      }
+      setValue("address", fields.address);
 
       // Check NIK duplicate if extracted
       if (fields.ktp_number) {
@@ -123,7 +141,7 @@ export default function RegisterPage() {
       setStep("review");
     } catch (err) {
       console.error(err);
-      setError("Gagal membaca KTP. Silakan coba dengan foto yang lebih jelas.");
+      setServerError("Gagal membaca KTP. Silakan coba dengan foto yang lebih jelas.");
     } finally {
       setOcrLoading(false);
     }
@@ -151,114 +169,78 @@ export default function RegisterPage() {
     }
   }
 
-  // ── Step 2 → Step 3: validate review fields ─────────────────────────────
-
-  function validateReviewFields(): boolean {
-    const errors: Record<string, string> = {};
-
-    if (!name.trim()) {
-      errors.name = "Nama lengkap wajib diisi.";
+  async function handleContinueToAccount() {
+    if (nikAlert) return;
+    const isValid = await trigger(["name", "ktp_number", "birth_date", "gender", "address"]);
+    if (isValid) {
+      setStep("account");
     }
-
-    if (!birthDate) {
-      errors.birth_date = "Tanggal lahir wajib diisi.";
-    }
-
-    if (!gender) {
-      errors.gender = "Jenis kelamin wajib dipilih.";
-    }
-
-    if (!address.trim()) {
-      errors.address = "Alamat wajib diisi.";
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  }
-
-  function handleContinueToAccount() {
-    if (nikAlert) return; // Block if NIK is duplicate
-    if (!validateReviewFields()) return;
-    setStep("account");
   }
 
   // ── Step 3: submit ───────────────────────────────────────────────────────
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    const errors: Record<string, string> = {};
-
-    if (!email.trim()) {
-      errors.email = "Email wajib diisi.";
-    }
-
-    if (!password) {
-      errors.password = "Kata sandi wajib diisi.";
-    } else if (password.length < 8) {
-      errors.password = "Kata sandi harus minimal 8 karakter.";
-    }
-
-    if (!confirm) {
-      errors.confirm = "Konfirmasi kata sandi wajib diisi.";
-    } else if (password !== confirm) {
-      errors.confirm = "Kata sandi tidak cocok.";
-    }
-
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
+  const onSubmit = async (data: RegisterFormValues) => {
+    setServerError("");
     setSubmitting(true);
 
-    // Upload KTP photo to Supabase Storage
-    let ktp_photo_url: string | null = null;
-    if (ktpFile) {
-      const ext = ktpFile.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    try {
+      // Upload KTP photo to Supabase Storage
+      let ktp_photo_url: string | null = null;
+      if (ktpFile) {
+        const ext = ktpFile.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("ktp-photos")
-        .upload(fileName, ktpFile, { upsert: false });
+        const { error: uploadError } = await supabase.storage
+          .from("ktp-photos")
+          .upload(fileName, ktpFile, { upsert: false });
 
-      if (uploadError) {
-        setError("Gagal mengunggah foto KTP. Silakan coba lagi.");
-        setSubmitting(false);
-        return;
+        if (uploadError) {
+          throw new Error("Gagal mengunggah foto KTP. Silakan coba lagi.");
+        }
+
+        const { data: publicData } = supabase.storage
+          .from("ktp-photos")
+          .getPublicUrl(fileName);
+
+        ktp_photo_url = publicData.publicUrl;
       }
 
-      const { data } = supabase.storage
-        .from("ktp-photos")
-        .getPublicUrl(fileName);
+      // Call register API
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          ktp_photo_url,
+        }),
+      });
 
-      ktp_photo_url = data.publicUrl;
+      const resData = await res.json();
+
+      if (!res.ok) {
+        throw new Error(resData.error ?? "Pendaftaran gagal. Silakan coba lagi.");
+      }
+
+      // Auto login after successful registration
+      const signInResult = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
+        // If auto-login fails, redirect to login page anyway but with a message
+        router.push("/login?registered=true");
+      } else {
+        // Successful login, redirect to applicant profile
+        router.push("/dashboard/applicant/profile");
+      }
+    } catch (err: any) {
+      setServerError(err.message);
+    } finally {
+      setSubmitting(false);
     }
-
-    // Call register API
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        password,
-        ktp_number: ktpNumber,
-        birth_date: birthDate,
-        gender,
-        address,
-        ktp_photo_url,
-      }),
-    });
-
-    const data = await res.json();
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(data.error ?? "Pendaftaran gagal. Silakan coba lagi.");
-      return;
-    }
-
-    router.push("/login?registered=true");
-  }
+  };
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -316,8 +298,8 @@ export default function RegisterPage() {
                   <Progress value={ocrProgress} />
                 </div>
               )}
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
+              {serverError && (
+                <p className="text-sm text-destructive">{serverError}</p>
               )}
             </div>
           )}
@@ -342,76 +324,61 @@ export default function RegisterPage() {
                 <Label htmlFor="name">Nama Lengkap</Label>
                 <Input
                   id="name"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, name: "" }));
-                  }}
-                  required
-                  className={fieldErrors.name ? "border-red-500" : ""}
+                  {...register("name")}
+                  className={errors.name ? "border-red-500" : ""}
                 />
-                {fieldErrors.name && (
-                  <p className="text-xs text-destructive">{fieldErrors.name}</p>
+                {errors.name && (
+                  <p className="text-xs text-destructive">{errors.name.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ktp_number">NIK</Label>
                 <Input
                   id="ktp_number"
-                  value={ktpNumber}
+                  {...register("ktp_number")}
                   readOnly
-                  maxLength={16}
                   className="bg-muted cursor-not-allowed"
                 />
+                {errors.ktp_number && (
+                  <p className="text-xs text-destructive">{errors.ktp_number.message}</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="birth_date">Tanggal Lahir</Label>
                 <Input
                   id="birth_date"
                   type="date"
-                  value={birthDate}
-                  onChange={(e) => {
-                    setBirthDate(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, birth_date: "" }));
-                  }}
-                  className={fieldErrors.birth_date ? "border-red-500" : ""}
+                  {...register("birth_date")}
+                  className={errors.birth_date ? "border-red-500" : ""}
                 />
-                {fieldErrors.birth_date && (
-                  <p className="text-xs text-destructive">{fieldErrors.birth_date}</p>
+                {errors.birth_date && (
+                  <p className="text-xs text-destructive">{errors.birth_date.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="gender">Jenis Kelamin</Label>
                 <select
                   id="gender"
-                  value={gender}
-                  onChange={(e) => {
-                    setGender(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, gender: "" }));
-                  }}
-                  className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.gender ? "border-red-500" : "border-input"}`}
+                  {...register("gender")}
+                  className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.gender ? "border-red-500" : "border-input"}`}
                 >
                   <option value="">Pilih jenis kelamin</option>
                   <option value="male">Laki-laki</option>
                   <option value="female">Perempuan</option>
                 </select>
-                {fieldErrors.gender && (
-                  <p className="text-xs text-destructive">{fieldErrors.gender}</p>
+                {errors.gender && (
+                  <p className="text-xs text-destructive">{errors.gender.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="address">Alamat</Label>
                 <Input
                   id="address"
-                  value={address}
-                  onChange={(e) => {
-                    setAddress(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, address: "" }));
-                  }}
-                  className={fieldErrors.address ? "border-red-500" : ""}
+                  {...register("address")}
+                  className={errors.address ? "border-red-500" : ""}
                 />
-                {fieldErrors.address && (
-                  <p className="text-xs text-destructive">{fieldErrors.address}</p>
+                {errors.address && (
+                  <p className="text-xs text-destructive">{errors.address.message}</p>
                 )}
               </div>
               <div className="flex gap-2 pt-2">
@@ -422,7 +389,6 @@ export default function RegisterPage() {
                   onClick={() => {
                     setStep("upload");
                     setNikAlert("");
-                    setFieldErrors({});
                   }}
                 >
                   Unggah Ulang KTP
@@ -431,7 +397,7 @@ export default function RegisterPage() {
                   type="button"
                   className="flex-1"
                   onClick={handleContinueToAccount}
-                  disabled={!name || !!nikAlert}
+                  disabled={!!nikAlert}
                 >
                   Lanjutkan
                 </Button>
@@ -441,24 +407,19 @@ export default function RegisterPage() {
 
           {/* ── Step 3: Email & password ── */}
           {step === "account" && (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
                   placeholder="anda@contoh.com"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, email: "" }));
-                  }}
+                  {...register("email")}
                   disabled={submitting}
-                  required
-                  className={fieldErrors.email ? "border-red-500" : ""}
+                  className={errors.email ? "border-red-500" : ""}
                 />
-                {fieldErrors.email && (
-                  <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -468,14 +429,9 @@ export default function RegisterPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Min. 8 karakter"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setFieldErrors((prev) => ({ ...prev, password: "" }));
-                    }}
+                    {...register("password")}
                     disabled={submitting}
-                    required
-                    className={fieldErrors.password ? "border-red-500 pr-10" : "pr-10"}
+                    className={errors.password ? "border-red-500 pr-10" : "pr-10"}
                   />
                   <button
                     type="button"
@@ -485,8 +441,8 @@ export default function RegisterPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {fieldErrors.password && (
-                  <p className="text-xs text-destructive">{fieldErrors.password}</p>
+                {errors.password && (
+                  <p className="text-xs text-destructive">{errors.password.message}</p>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -496,14 +452,9 @@ export default function RegisterPage() {
                     id="confirm"
                     type={showConfirm ? "text" : "password"}
                     placeholder="••••••••"
-                    value={confirm}
-                    onChange={(e) => {
-                      setConfirm(e.target.value);
-                      setFieldErrors((prev) => ({ ...prev, confirm: "" }));
-                    }}
+                    {...register("confirm")}
                     disabled={submitting}
-                    required
-                    className={fieldErrors.confirm ? "border-red-500 pr-10" : "pr-10"}
+                    className={errors.confirm ? "border-red-500 pr-10" : "pr-10"}
                   />
                   <button
                     type="button"
@@ -513,12 +464,12 @@ export default function RegisterPage() {
                     {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {fieldErrors.confirm && (
-                  <p className="text-xs text-destructive">{fieldErrors.confirm}</p>
+                {errors.confirm && (
+                  <p className="text-xs text-destructive">{errors.confirm.message}</p>
                 )}
               </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
+              {serverError && (
+                <p className="text-sm text-destructive">{serverError}</p>
               )}
               <div className="flex gap-2 pt-2">
                 <Button
@@ -527,7 +478,6 @@ export default function RegisterPage() {
                   className="flex-1"
                   onClick={() => {
                     setStep("review");
-                    setFieldErrors({});
                   }}
                   disabled={submitting}
                 >

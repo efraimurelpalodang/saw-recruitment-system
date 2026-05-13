@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { profileSchema, type ProfileFormValues } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,25 +59,23 @@ export default function ApplicantProfilePage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-
-  // Personal
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [province, setProvince] = useState("");
-
-  // Academic & professional
-  const [educationLevel, setEducationLevel] = useState("");
-  const [major, setMajor] = useState("");
-  const [institution, setInstitution] = useState("");
-  const [experienceYears, setExperienceYears] = useState("");
-  const [ipk, setIpk] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(profileSchema) as any,
+  });
+
+  const name = watch("name");
+  const email = watch("email" as any); // email is not in profileSchema but fetched from API
+  const [emailValue, setEmailValue] = useState("");
 
   // Load profile on mount
   useEffect(() => {
@@ -85,21 +86,25 @@ export default function ApplicantProfilePage() {
           throw new Error("Gagal mengambil data profil");
         }
         const data = await res.json();
-        setName(data.user?.name ?? "");
-        setEmail(data.user?.email ?? "");
-        setPhone(data.user?.phone ?? "");
-        setBirthDate(data.birth_date ? data.birth_date.split("T")[0] : "");
-        setGender(data.gender ?? "");
-        setAddress(data.address ?? "");
-        setCity(data.city ?? "");
-        setProvince(data.province ?? "");
-        setEducationLevel(data.education_level ?? "");
-        setMajor(data.major ?? "");
-        setInstitution(data.institution ?? "");
-        setExperienceYears(
-          data.experience_years !== null ? String(data.experience_years) : ""
-        );
-        setIpk(data.ipk !== null ? String(data.ipk) : "");
+        
+        const formData: any = {
+          name: data.user?.name ?? "",
+          phone: data.user?.phone ?? "",
+          birth_date: data.birth_date ? data.birth_date.split("T")[0] : "",
+          gender: data.gender ?? "",
+          address: data.address ?? "",
+          city: data.city ?? "",
+          province: data.province ?? "",
+          education_level: data.education_level ?? "",
+          major: data.major ?? "",
+          institution: data.institution ?? "",
+          experience_years: data.experience_years ?? 0,
+          ipk: data.ipk ?? 0,
+          skills: data.skills ?? "",
+        };
+
+        reset(formData);
+        setEmailValue(data.user?.email ?? "");
         setSkills(data.skills ? data.skills.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
       } catch (err) {
         setError("Terjadi kesalahan saat memuat data.");
@@ -108,10 +113,9 @@ export default function ApplicantProfilePage() {
       }
     }
     load();
-  }, []);
+  }, [reset]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const onSubmit = async (data: any) => {
     setSaving(true);
     setSuccess("");
     setError("");
@@ -121,25 +125,14 @@ export default function ApplicantProfilePage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          phone,
-          birth_date: birthDate || null,
-          gender: gender || null,
-          address,
-          city,
-          province,
-          education_level: educationLevel || null,
-          major,
-          institution,
-          experience_years: experienceYears !== "" ? Number(experienceYears) : null,
-          ipk: ipk !== "" ? Number(ipk) : null,
+          ...data,
           skills: skills.join(", "),
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Gagal menyimpan perubahan.");
+        const resData = await res.json();
+        throw new Error(resData.error ?? "Gagal menyimpan perubahan.");
       }
 
       setSuccess("Profil berhasil diperbarui.");
@@ -148,11 +141,12 @@ export default function ApplicantProfilePage() {
     } finally {
       setSaving(false);
     }
-  }
+  };
 
   const addSkill = () => {
     if (newSkill.trim() && !skills.includes(newSkill.trim())) {
-      setSkills([...skills, newSkill.trim()]);
+      const updatedSkills = [...skills, newSkill.trim()];
+      setSkills(updatedSkills);
       setNewSkill("");
     }
   };
@@ -179,7 +173,7 @@ export default function ApplicantProfilePage() {
           <h1 className="text-3xl font-bold tracking-tight">{name || "Pelamar"}</h1>
           <div className="flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Mail className="h-3.5 w-3.5" /> {email}
+              <Mail className="h-3.5 w-3.5" /> {emailValue}
             </span>
             <span className="flex items-center gap-1">
               <UserCircle className="h-3.5 w-3.5" /> Pelamar
@@ -194,7 +188,7 @@ export default function ApplicantProfilePage() {
 
       <Separator className="bg-foreground/5" />
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <Tabs defaultValue="personal" className="space-y-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <TabsList className="grid grid-cols-2 w-full sm:w-[400px] bg-muted/50 p-1">
@@ -227,16 +221,15 @@ export default function ApplicantProfilePage() {
                       <Label htmlFor="name" className="text-sm font-semibold">Nama Lengkap</Label>
                       <Input
                         id="name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        {...register("name")}
                         disabled={saving}
-                        required
-                        className="focus-visible:ring-foreground/20"
+                        className={`focus-visible:ring-foreground/20 ${errors.name ? "border-red-500" : ""}`}
                       />
+                      {errors.name && <p className="text-xs text-destructive">{(errors.name as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
-                      <Input id="email" value={email} disabled className="bg-muted/50 cursor-not-allowed" />
+                      <Input id="email" value={emailValue} disabled className="bg-muted/50 cursor-not-allowed" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone" className="text-sm font-semibold">Nomor Telepon</Label>
@@ -245,13 +238,13 @@ export default function ApplicantProfilePage() {
                         <Input
                           id="phone"
                           type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
+                          {...register("phone")}
                           disabled={saving}
                           placeholder="+62..."
-                          className="pl-10 focus-visible:ring-foreground/20"
+                          className={`pl-10 focus-visible:ring-foreground/20 ${errors.phone ? "border-red-500" : ""}`}
                         />
                       </div>
+                      {errors.phone && <p className="text-xs text-destructive">{(errors.phone as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="birth_date" className="text-sm font-semibold">Tanggal Lahir</Label>
@@ -260,17 +253,21 @@ export default function ApplicantProfilePage() {
                         <Input
                           id="birth_date"
                           type="date"
-                          value={birthDate}
-                          onChange={(e) => setBirthDate(e.target.value)}
+                          {...register("birth_date")}
                           disabled={saving}
-                          className="pl-10 focus-visible:ring-foreground/20"
+                          className={`pl-10 focus-visible:ring-foreground/20 ${errors.birth_date ? "border-red-500" : ""}`}
                         />
                       </div>
+                      {errors.birth_date && <p className="text-xs text-destructive">{(errors.birth_date as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="gender" className="text-sm font-semibold">Jenis Kelamin</Label>
-                      <Select value={gender} onValueChange={setGender} disabled={saving}>
-                        <SelectTrigger id="gender" className="focus:ring-foreground/20">
+                      <Select 
+                        value={watch("gender")} 
+                        onValueChange={(val) => setValue("gender", val)} 
+                        disabled={saving}
+                      >
+                        <SelectTrigger id="gender" className={`focus:ring-foreground/20 ${errors.gender ? "border-red-500" : ""}`}>
                           <SelectValue placeholder="Pilih jenis kelamin" />
                         </SelectTrigger>
                         <SelectContent>
@@ -281,6 +278,7 @@ export default function ApplicantProfilePage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.gender && <p className="text-xs text-destructive">{(errors.gender as any).message}</p>}
                     </div>
                   </div>
                 </CardContent>
@@ -298,32 +296,32 @@ export default function ApplicantProfilePage() {
                     <Label htmlFor="address" className="text-sm font-semibold">Alamat Lengkap</Label>
                     <Textarea
                       id="address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
+                      {...register("address")}
                       disabled={saving}
                       rows={4}
-                      className="resize-none focus-visible:ring-foreground/20"
+                      className={`resize-none focus-visible:ring-foreground/20 ${errors.address ? "border-red-500" : ""}`}
                     />
+                    {errors.address && <p className="text-xs text-destructive">{(errors.address as any).message}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="city" className="text-sm font-semibold">Kota/Kabupaten</Label>
                     <Input
                       id="city"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
+                      {...register("city")}
                       disabled={saving}
-                      className="focus-visible:ring-foreground/20"
+                      className={`focus-visible:ring-foreground/20 ${errors.city ? "border-red-500" : ""}`}
                     />
+                    {errors.city && <p className="text-xs text-destructive">{(errors.city as any).message}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="province" className="text-sm font-semibold">Provinsi</Label>
                     <Input
                       id="province"
-                      value={province}
-                      onChange={(e) => setProvince(e.target.value)}
+                      {...register("province")}
                       disabled={saving}
-                      className="focus-visible:ring-foreground/20"
+                      className={`focus-visible:ring-foreground/20 ${errors.province ? "border-red-500" : ""}`}
                     />
+                    {errors.province && <p className="text-xs text-destructive">{(errors.province as any).message}</p>}
                   </div>
                 </CardContent>
               </Card>
@@ -344,11 +342,11 @@ export default function ApplicantProfilePage() {
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="education_level" className="text-sm font-semibold">Tingkat Pendidikan</Label>
                       <Select
-                        value={educationLevel}
-                        onValueChange={setEducationLevel}
+                        value={watch("education_level")}
+                        onValueChange={(val) => setValue("education_level", val)}
                         disabled={saving}
                       >
-                        <SelectTrigger id="education_level" className="focus:ring-foreground/20">
+                        <SelectTrigger id="education_level" className={`focus:ring-foreground/20 ${errors.education_level ? "border-red-500" : ""}`}>
                           <SelectValue placeholder="Pilih tingkat" />
                         </SelectTrigger>
                         <SelectContent>
@@ -359,17 +357,18 @@ export default function ApplicantProfilePage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.education_level && <p className="text-xs text-destructive">{(errors.education_level as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="major" className="text-sm font-semibold">Jurusan</Label>
                       <Input
                         id="major"
-                        value={major}
-                        onChange={(e) => setMajor(e.target.value)}
+                        {...register("major")}
                         disabled={saving}
                         placeholder="Contoh: Teknik Informatika"
-                        className="focus-visible:ring-foreground/20"
+                        className={`focus-visible:ring-foreground/20 ${errors.major ? "border-red-500" : ""}`}
                       />
+                      {errors.major && <p className="text-xs text-destructive">{(errors.major as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="ipk" className="text-sm font-semibold">IPK / GPA</Label>
@@ -379,23 +378,23 @@ export default function ApplicantProfilePage() {
                         min="0"
                         max="4"
                         step="0.01"
-                        value={ipk}
-                        onChange={(e) => setIpk(e.target.value)}
+                        {...register("ipk")}
                         disabled={saving}
                         placeholder="0.00 – 4.00"
-                        className="focus-visible:ring-foreground/20"
+                        className={`focus-visible:ring-foreground/20 ${errors.ipk ? "border-red-500" : ""}`}
                       />
+                      {errors.ipk && <p className="text-xs text-destructive">{(errors.ipk as any).message}</p>}
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="institution" className="text-sm font-semibold">Nama Institusi</Label>
                       <Input
                         id="institution"
-                        value={institution}
-                        onChange={(e) => setInstitution(e.target.value)}
+                        {...register("institution")}
                         disabled={saving}
                         placeholder="Nama Sekolah atau Universitas"
-                        className="focus-visible:ring-foreground/20"
+                        className={`focus-visible:ring-foreground/20 ${errors.institution ? "border-red-500" : ""}`}
                       />
+                      {errors.institution && <p className="text-xs text-destructive">{(errors.institution as any).message}</p>}
                     </div>
                   </div>
                 </CardContent>
@@ -415,12 +414,12 @@ export default function ApplicantProfilePage() {
                       id="experience_years"
                       type="number"
                       min="0"
-                      value={experienceYears}
-                      onChange={(e) => setExperienceYears(e.target.value)}
+                      {...register("experience_years")}
                       disabled={saving}
                       placeholder="0"
-                      className="focus-visible:ring-foreground/20"
+                      className={`focus-visible:ring-foreground/20 ${errors.experience_years ? "border-red-500" : ""}`}
                     />
+                    {errors.experience_years && <p className="text-xs text-destructive">{(errors.experience_years as any).message}</p>}
                   </div>
                   <div className="space-y-4">
                     <Label htmlFor="skills" className="text-sm font-semibold">Keahlian (Skills)</Label>
