@@ -160,7 +160,7 @@ export default function ApplicantProfilePage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 md:px-8 space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-6 pb-2">
         <Avatar className="h-24 w-24 border-2 border-primary/10">
@@ -485,7 +485,7 @@ export default function ApplicantProfilePage() {
 
 function ProfileSkeleton() {
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 md:px-8 space-y-8 animate-pulse">
+    <div className="space-y-8 animate-pulse">
       <div className="flex flex-col md:flex-row items-center md:items-end gap-6 pb-2">
         <Skeleton className="h-24 w-24 rounded-full" />
         <div className="flex-1 space-y-2">

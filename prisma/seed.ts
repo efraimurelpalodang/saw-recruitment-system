@@ -49,6 +49,25 @@ async function main() {
   }
 
   console.log("✅ SAW criteria seeded (C1–C5, total weight = 1.00)");
+
+  // ── 3. Seed Sample Job Posting ───────────────────────────
+  const hrd = await prisma.user.findFirst({ where: { role: "hrd" } });
+  if (hrd) {
+    await prisma.jobPosting.create({
+      data: {
+        title: "Software Engineer",
+        description: "Join our dynamic team as a Software Engineer. You will be responsible for developing high-quality web applications using modern technologies.",
+        requirements: "Bachelor's degree in Computer Science, 2+ years of experience with React/Next.js.",
+        quota: 10,
+        min_age: 18,
+        max_age: 40,
+        status: "open",
+        created_by: hrd.id,
+        deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+      },
+    });
+    console.log("✅ Sample job posting created");
+  }
 }
 
 main()

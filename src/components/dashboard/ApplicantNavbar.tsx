@@ -52,7 +52,7 @@ export function ApplicantNavbar() {
 
   const navLinks = [
     { name: "Beranda", href: "/dashboard/applicant", icon: LayoutDashboard },
-    { name: "Lowongan", href: "/dashboard/applicant/jobs", icon: Briefcase },
+    { name: "Lowongan", href: "/dashboard/applicant/lamaran", icon: Briefcase },
     { name: "Profil Saya", href: "/dashboard/applicant/profile", icon: UserCircle },
   ];
 
