@@ -129,4 +129,14 @@
     html {
         @apply font-sans;
     }
+
+    /* Sembunyikan scrollbar di seluruh halaman */
+    *::-webkit-scrollbar {
+        display: none;
+    }
+
+    * {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
 }

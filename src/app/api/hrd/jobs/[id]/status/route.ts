@@ -5,11 +5,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  if ((session.user as any).role !== "hrd") return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  if (!session) return NextResponse.json({ error: "Tidak terautentikasi." }, { status: 401 });
+  if ((session.user as any).role !== "hrd") return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
 
   const body = await req.json();
   const { status } = body;
@@ -19,21 +19,22 @@ export async function PATCH(
     open: "closed",
   };
 
+  const { id } = await params;
   const job = await prisma.jobPosting.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
-  if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  if (!job) return NextResponse.json({ error: "Lowongan tidak ditemukan." }, { status: 404 });
 
   if (validTransitions[job.status] !== status) {
     return NextResponse.json(
-      { error: `Cannot transition from "${job.status}" to "${status}".` },
+      { error: `Tidak dapat mengubah status dari "${job.status}" ke "${status}".` },
       { status: 400 }
     );
   }
 
   const updated = await prisma.jobPosting.update({
-    where: { id: params.id },
+    where: { id },
     data: { status: status as any },
   });
 

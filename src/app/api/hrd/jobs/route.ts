@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 
 async function requireHrd() {
   const session = await getServerSession(authOptions);
-  if (!session) return { error: "Unauthorized.", status: 401 };
-  if ((session.user as any).role !== "hrd") return { error: "Forbidden.", status: 403 };
+  if (!session) return { error: "Tidak terautentikasi.", status: 401 };
+  if ((session.user as any).role !== "hrd") return { error: "Akses ditolak.", status: 403 };
   return { session };
 }
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   if (!title || !description || !min_age || !max_age || !quota) {
     return NextResponse.json(
-      { error: "Title, description, age range, and quota are required." },
+      { error: "Judul, deskripsi, rentang usia, dan kuota wajib diisi." },
       { status: 400 }
     );
   }

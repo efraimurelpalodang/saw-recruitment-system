@@ -1,3 +1,3 @@
 export default function HrdLaporanPage() {
-  return <p className="p-8">Reports — coming soon.</p>;
+  return <p className="p-8">Laporan — segera hadir.</p>;
 }
