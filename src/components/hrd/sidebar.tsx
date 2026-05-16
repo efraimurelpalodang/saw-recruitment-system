@@ -51,7 +51,7 @@ export function HrdSidebar() {
         <div className="flex items-center h-14 px-3 gap-2 shrink-0">
           {expanded && (
             <span className="font-semibold text-sm truncate flex-1 text-foreground">
-              HRD Panel
+              HRD Dashboard
             </span>
           )}
           <button
