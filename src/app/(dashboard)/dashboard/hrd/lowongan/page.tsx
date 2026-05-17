@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -267,7 +268,6 @@ export default function HrdLowonganPage() {
                       onChange={field("title")}
                       required
                       disabled={submitting}
-                      placeholder="Contoh: Operator Produksi"
                     />
                   </div>
 
@@ -289,7 +289,7 @@ export default function HrdLowonganPage() {
                 </div>
 
                 {/* Kolom Kanan — Persyaratan */}
-                <div className="space-y-4">
+                <div className="space-y-9">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground tracking-tight">
                       Persyaratan <span className="text-destructive">*</span>
@@ -306,7 +306,7 @@ export default function HrdLowonganPage() {
                     </Button>
                   </div>
 
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                     {requirements.map((req, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted text-xs font-medium text-muted-foreground shrink-0">
@@ -317,7 +317,7 @@ export default function HrdLowonganPage() {
                           onChange={(e) => handleRequirementChange(idx, e.target.value)}
                           disabled={submitting}
                           required
-                          placeholder={`Persyaratan ke-${idx + 1}`}
+                          // placeholder={`Persyaratan ke-${idx + 1}`}
                           className="flex-1"
                         />
                         <Button
@@ -336,13 +336,8 @@ export default function HrdLowonganPage() {
                 </div>
               </div>
 
-              <Separator />
-
               {/* Baris Bawah — Detail Tambahan (4 kolom penuh) */}
               <div>
-                <h3 className="text-sm font-semibold text-foreground tracking-tight mb-3">
-                  Detail Tambahan
-                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="min_age" className="text-sm font-medium">
@@ -356,7 +351,6 @@ export default function HrdLowonganPage() {
                       onChange={field("min_age")}
                       required
                       disabled={submitting}
-                      placeholder="18"
                     />
                   </div>
                   <div className="space-y-2">
@@ -371,7 +365,6 @@ export default function HrdLowonganPage() {
                       onChange={field("max_age")}
                       required
                       disabled={submitting}
-                      placeholder="35"
                     />
                   </div>
                   <div className="space-y-2">
@@ -386,7 +379,6 @@ export default function HrdLowonganPage() {
                       onChange={field("quota")}
                       required
                       disabled={submitting}
-                      placeholder="5"
                     />
                   </div>
                   <div className="space-y-2">
@@ -405,8 +397,6 @@ export default function HrdLowonganPage() {
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Separator />
 
               <DialogFooter>
                 <Button
@@ -444,7 +434,7 @@ export default function HrdLowonganPage() {
             <Card key={job.id}>
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
-                  <CardTitle className="text-base">{job.title}</CardTitle>
+                  <CardTitle className="text-base uppercase">{job.title}</CardTitle>
                   <Badge variant={variant}>{label}</Badge>
                 </div>
                 <CardDescription>
@@ -486,6 +476,13 @@ export default function HrdLowonganPage() {
                 {job.status === "open" && (
                   <Button size="sm" variant="outline" onClick={() => handleStatusChange(job, "closed")}>
                     Tutup Lowongan
+                  </Button>
+                )}
+                {(job.status === "open" || job.status === "closed") && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/dashboard/hrd/seleksi/${job.id}`}>
+                      View applicants ({job._count.job_applications})
+                    </Link>
                   </Button>
                 )}
               </CardFooter>
