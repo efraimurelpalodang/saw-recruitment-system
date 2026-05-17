@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/pagination";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import Link from "next/link";
 
 type SelectionStage = {
   stage_name: string;
@@ -190,6 +191,14 @@ export default function SeleksiDetailPage() {
                 <p className="text-xs text-muted-foreground">
                   Applied: {new Date(app.applied_at).toLocaleDateString("en-GB")}
                 </p>
+
+                <div className="pt-1">
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/dashboard/hrd/seleksi/${id}/${app.id}`}>
+                      View full profile
+                    </Link>
+                  </Button>
+                </div>
 
                 {feedback[app.id] && (
                   <p className="text-sm text-destructive">{feedback[app.id]}</p>
