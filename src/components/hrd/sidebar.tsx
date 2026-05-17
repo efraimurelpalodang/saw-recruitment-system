@@ -10,6 +10,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -26,18 +36,19 @@ import {
 import { signOut } from "next-auth/react";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard/hrd", icon: LayoutDashboard },
-  { label: "Job Postings", href: "/dashboard/hrd/lowongan", icon: Briefcase },
-  { label: "Applicants", href: "/dashboard/hrd/pelamar", icon: Users },
-  { label: "Selection", href: "/dashboard/hrd/seleksi", icon: ClipboardCheck },
-  { label: "SAW Ranking", href: "/dashboard/hrd/ranking", icon: BarChart2 },
-  { label: "Reports", href: "/dashboard/hrd/laporan", icon: FileOutput },
-  { label: "Criteria", href: "/dashboard/hrd/kriteria", icon: SlidersHorizontal },
+  { label: "Dasbor", href: "/dashboard/hrd", icon: LayoutDashboard },
+  { label: "Lowongan Kerja", href: "/dashboard/hrd/lowongan", icon: Briefcase },
+  { label: "Pelamar", href: "/dashboard/hrd/pelamar", icon: Users },
+  { label: "Seleksi", href: "/dashboard/hrd/seleksi", icon: ClipboardCheck },
+  { label: "Perangkingan SAW", href: "/dashboard/hrd/ranking", icon: BarChart2 },
+  { label: "Laporan", href: "/dashboard/hrd/laporan", icon: FileOutput },
+  { label: "Kriteria", href: "/dashboard/hrd/kriteria", icon: SlidersHorizontal },
 ];
 
 export function HrdSidebar() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(true);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -51,13 +62,13 @@ export function HrdSidebar() {
         <div className="flex items-center h-14 px-3 gap-2 shrink-0">
           {expanded && (
             <span className="font-semibold text-sm truncate flex-1 text-foreground">
-              HRD Panel
+              Dasbor HRD
             </span>
           )}
           <button
             onClick={() => setExpanded((v) => !v)}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-auto"
-            aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+            aria-label={expanded ? "Tutup sidebar" : "Buka sidebar"}
           >
             {expanded ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
           </button>
@@ -103,34 +114,55 @@ export function HrdSidebar() {
 
         <Separator />
 
-        {/* Sign out */}
+        {/* Keluar */}
         <div className="px-2 py-3">
           {!expanded ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  onClick={() => setLogoutOpen(true)}
                   className="flex items-center gap-3 rounded-md px-2 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors w-full"
-                  aria-label="Sign out"
+                  aria-label="Keluar"
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8}>
-                Sign out
+                Keluar
               </TooltipContent>
             </Tooltip>
           ) : (
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => setLogoutOpen(true)}
               className="flex items-center gap-3 rounded-md px-2 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-muted transition-colors w-full"
             >
               <LogOut className="h-4 w-4 shrink-0" />
-              <span className="truncate">Sign out</span>
+              <span className="truncate">Keluar</span>
             </button>
           )}
         </div>
       </aside>
+
+      {/* Konfirmasi Keluar */}
+      <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Konfirmasi Keluar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin keluar dari akun ini?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
+              Ya, Keluar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }
